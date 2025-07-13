@@ -1,0 +1,43 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+    resource_to_telemetry_conversion:
+      enabled: true
+
+processors:
+  batch: {}
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:9464"
+
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+
+  logging:
+    loglevel: info
+
+  otlp/tempo:
+    # endpoint: http://tempo:4317
+    endpoint: tempo:4319
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [loki]
+
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/tempo]

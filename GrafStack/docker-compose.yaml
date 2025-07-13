@@ -1,0 +1,101 @@
+services:
+
+  ### OTEL Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.95.0
+    command: ["--config=/etc/otelcol-config.yaml"]
+    volumes:
+      - ./Config/otelcol-config.yaml:/etc/otelcol-config.yaml
+    ports:
+      - "4317:4317"   # gRPC
+      - "4318:4318"   # HTTP
+    networks:
+      - otel-net
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  ### Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./Config/prometheus.yaml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - otel-net
+
+  ### Loki
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - otel-net
+
+  ### Tempo
+  tempo:
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./Config/tempo.yaml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"
+      - "4319:4319"    # ✅ Tambah ini untuk expose gRPC port
+    networks:
+      - otel-net
+
+  ### Grafana
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    networks:
+      - otel-net
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+      # Grafana hanya membaca file provisioning jika disimpan dalam struktur direktori dan nama yang benar.
+      # datasources/datasource.yaml. Hal ini ada dalam ./Config/grafana
+      - ./Config/grafana:/etc/grafana/provisioning 
+
+  ### Microservice: Customer
+  customer-service:
+    build:
+      context: ./AppCustomerService
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    networks:
+      - otel-net
+    depends_on:
+      - otel-collector
+
+  ### Microservice: Order
+  order-service:
+    build:
+      context: ./AppOrderService
+    ports:
+      - "5002:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    networks:
+      - otel-net
+    depends_on:
+      - otel-collector
+
+volumes:
+  grafana-storage:
+
+networks:
+  otel-net:

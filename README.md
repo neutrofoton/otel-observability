@@ -1,1 +1,1 @@
-# otel-loki
+# Observability Stack in Net
