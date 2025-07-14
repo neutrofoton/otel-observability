@@ -1,0 +1,97 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - otel-net
+
+  otel-collector:
+    # image: otel/opentelemetry-collector:0.95.0
+    image: otel/opentelemetry-collector-contrib:0.95.0
+    command: ["--config=/etc/otelcol-config.yaml"]
+    volumes:
+      - ./Config/otelcol-config.yaml:/etc/otelcol-config.yaml
+    ports:
+      - "4317:4317"  # gRPC
+      - "4318:4318"  # HTTP
+    networks:
+      - otel-net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.2
+    container_name: kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      # Nonaktifkan security jika Elasticsearch kamu nonaktif juga
+      # Jika kamu mengaktifkan xpack.security di Elasticsearch, aktifkan konfigurasi ini
+      # ELASTICSEARCH_USERNAME: "kibana_system"
+      # ELASTICSEARCH_PASSWORD: "password"
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - otel-net
+
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    ports:
+      - "3000:3000"
+    volumes:
+      # Grafana hanya membaca file provisioning jika disimpan dalam struktur direktori dan nama yang benar.
+      # datasources/datasource.yaml. Hal ini ada dalam ./Config/grafana
+      - ./Config/grafana:/etc/grafana/provisioning 
+    networks:
+      - otel-net
+    depends_on:
+      - otel-collector
+      
+  customer-service:
+    build:
+      context: ./AppCustomerService
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    networks:
+      - otel-net
+    depends_on:
+      - otel-collector
+
+  order-service:
+    build:
+      context: ./AppOrderService
+    ports:
+      - "5002:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    networks:
+      - otel-net
+    depends_on:
+      - otel-collector
+
+volumes:
+  esdata:
+
+networks:
+  otel-net:

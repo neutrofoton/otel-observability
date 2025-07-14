@@ -1,0 +1,48 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  elasticsearch/customer:
+    endpoints: [http://elasticsearch:9200]
+    logs_index: otel-logs-customer-service
+    flush:
+      interval: 1s
+
+  elasticsearch/order:
+    endpoints: [http://elasticsearch:9200]
+    logs_index: otel-logs-order-service
+    flush:
+      interval: 1s
+
+  logging:
+    verbosity: detailed
+
+connectors:
+  forward/customer:
+  forward/order:
+
+service:
+  pipelines:
+    logs/customer:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [forward/customer]
+
+    logs/order:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [forward/order]
+
+    logs/customer/export:
+      receivers: [forward/customer]
+      exporters: [elasticsearch/customer]
+
+    logs/order/export:
+      receivers: [forward/order]
+      exporters: [elasticsearch/order]
