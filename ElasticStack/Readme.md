@@ -132,3 +132,11 @@ The steps are:
     ```
 
 - Do the same to other microservice log index `otel-logs-order-service`
+
+# Troubleshooting
+
+```bash
+docker exec -it alpine-debug sh
+
+/$ apk update && apk add curl
+```
